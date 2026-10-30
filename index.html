@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NYSC CDS Check-In</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:'DM Sans',system-ui,sans-serif;color:#12261B;background:#fff;min-height:100vh}
+.screen{min-height:100vh;display:none;flex-direction:column;max-width:480px;margin:0 auto}
+.screen.on{display:flex}
+header{background:#0B7A43;color:#fff;padding:56px 24px 32px}
+h1{margin:0;font-size:44px;line-height:1.1}
+header p{margin:8px 0 0;font-size:16px}
+main{flex:1;padding:32px 24px;display:flex;flex-direction:column;gap:18px}
+label{font-weight:500}
+input{height:58px;border:2px solid #0B7A43;border-radius:14px;padding:0 16px;font:inherit;font-size:18px;color:#12261B}
+button{height:58px;border:0;border-radius:14px;background:#0B7A43;color:#fff;font:inherit;font-size:19px;font-weight:700;cursor:pointer}
+button:disabled{opacity:.6}
+:focus-visible{outline:3px solid #12261B;outline-offset:2px}
+.note{color:#3F5A4A;font-size:15px;line-height:1.4}
+#ok{background:#0B7A43;color:#fff;align-items:center;text-align:center;padding:56px 24px}
+#ok .num{font-size:132px;font-weight:700;line-height:1;margin:8px 0 32px}
+#ok .card{background:#fff;color:#12261B;border-radius:16px;padding:20px;width:100%}
+#ok .time{font-size:32px;font-weight:700;color:#0B7A43}
+#bad{align-items:center;text-align:center;padding:56px 24px}
+#bad p{font-size:18px;line-height:1.45;color:#3F5A4A}
+#bad button{margin-top:auto;width:100%}
+</style>
+</head>
+<body>
+<section class="screen on" id="form">
+<header><h1>NYSC CDS</h1><p>Scan. Enter your code. Check in.</p></header>
+<main>
+<label for="code">Your code</label>
+<input id="code" autocomplete="off" autocapitalize="characters" placeholder="e.g. LA/26A/0123">
+<p class="note">We’ll ask for your location to confirm you’re at the venue.</p>
+<button id="go">Check In</button>
+<p class="note" style="margin-top:auto;text-align:center">One check-in per code. Numbers are given in order of arrival.</p>
+</main>
+</section>
+<section class="screen" id="ok">
+<h2 style="margin:0">NYSC CDS</h2>
+<h1 style="font-size:28px;margin-top:40px">You’re checked in</h1>
+<div>Your number</div>
+<div class="num" id="num"></div>
+<div class="card"><div class="note">Clocked in at</div><div class="time" id="time"></div><div class="note" id="date"></div></div>
+</section>
+<section class="screen" id="bad">
+<h2 style="margin:0;color:#0B7A43">NYSC CDS</h2>
+<h1 style="font-size:28px;margin-top:64px">Check-in not completed</h1>
+<p id="msg"></p>
+<button id="retry">Try again</button>
+</section>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {getFirestore,doc,runTransaction,serverTimestamp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// 1. Firebase config
+const firebaseConfig = {
+  apiKey: "AIzaSyAV9iAHGcISrYF0PR3wVZekkyKONlO26_A",
+  authDomain: "nysc-cds-checkin.firebaseapp.com",
+  projectId: "nysc-cds-checkin",
+  storageBucket: "nysc-cds-checkin.firebasestorage.app",
+  messagingSenderId: "429002366026",
+  appId: "1:429002366026:web:9ab29432d9468ec2181ab3"
+};
+// 2. Venue spot and allowed distance
+const VENUE = {lat: 6.518806, lng: 3.359306};
+const RADIUS_M = 100;
+
+const db = getFirestore(initializeApp(firebaseConfig));
+const $ = id => document.getElementById(id);
+const deviceId = (() => { try { let d = localStorage.getItem("deviceId"); if (!d) { d = crypto.randomUUID(); localStorage.setItem("deviceId", d); } return d; } catch { return crypto.randomUUID(); } })();
+const show = id => document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id));
+const fail = m => { $("msg").textContent = m; show("bad"); };
+const done = (n, t) => {
+  $("num").textContent = n;
+  $("time").textContent = t.toLocaleTimeString("en-US", {hour: "2-digit", minute: "2-digit"});
+  $("date").textContent = t.toLocaleDateString("en-GB", {weekday: "long", day: "numeric", month: "long", year: "numeric"});
+  show("ok");
+};
+const metres = (a, b, c, d) => { const R = 6371000, r = x => x * Math.PI / 180, p = r(c - a), l = r(d - b);
+  const h = Math.sin(p / 2) ** 2 + Math.cos(r(a)) * Math.cos(r(c)) * Math.sin(l / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
+const where = () => new Promise((ok, no) => navigator.geolocation ? navigator.geolocation.getCurrentPosition(ok, no, {enableHighAccuracy: true, timeout: 15000}) : no());
+
+$("retry").onclick = () => show("form");
+$("go").onclick = async () => {
+  const code = $("code").value.trim().toUpperCase();
+  if (!code) return fail("Enter your code to check in.");
+  if (!/^LA\/26[AB]\/\d{4,}$/.test(code)) return fail("That code isn’t valid. It should look like LA/26A/0123.");
+  $("go").disabled = true;
+  try {
+    let pos;
+    try { pos = await where(); } catch { return fail("We couldn’t get your location. Allow location access and try again."); }
+    if (metres(pos.coords.latitude, pos.coords.longitude, VENUE.lat, VENUE.lng) > RADIUS_M) return fail("You’re too far from the venue. Move closer and try again.");
+    const ref = doc(db, "codes", code.replace(/\//g, "_")), cref = doc(db, "counter", "main");
+    const r = await runTransaction(db, async t => {
+      const cs = await t.get(ref);
+      if (!cs.exists()) return {err: "That code isn’t on the list."};
+      const c = cs.data();
+      if (c.used) return c.deviceId === deviceId ? {n: c.number, t: c.checkedInAt ? c.checkedInAt.toDate() : new Date()} : {err: "This code has already been used."};
+      const n = (await t.get(cref)).data().count + 1;
+      t.update(cref, {count: n});
+      t.update(ref, {used: true, number: n, deviceId, checkedInAt: serverTimestamp()});
+      return {n, t: new Date()};
+    });
+    if (r.err) return fail(r.err);
+    done(r.n, r.t);
+  } catch (e) { fail("Something went wrong. Check your connection and try again."); }
+  finally { $("go").disabled = false; }
+};
+</script>
+</body>
+</html>
