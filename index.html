@@ -89,7 +89,7 @@ $("retry").onclick = () => show("form");
 $("go").onclick = async () => {
   const code = $("code").value.trim().toUpperCase();
   if (!code) return fail("Enter your code to check in.");
-  if (!/^LA\/26[AB]\/\d{4,}$/.test(code)) return fail("That code isn’t valid. It should look like LA/26A/0123.");
+  if (!/^LA\/2[67][ABC]\/\d{4,}$/.test(code)) return fail("That code isn’t valid. It should look like LA/26A/0123.");
   $("go").disabled = true;
   try {
     let pos;
