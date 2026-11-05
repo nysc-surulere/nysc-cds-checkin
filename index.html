@@ -67,7 +67,7 @@ const firebaseConfig = {
   appId: "1:429002366026:web:9ab29432d9468ec2181ab3"
 };
 // 2. Venue spot and allowed distance
-const VENUE = {lat: 6.518806, lng: 3.359306};
+const VENUE = {lat: 6.5132891, lng: 3.3559699};
 const RADIUS_M = 100;
 
 const db = getFirestore(initializeApp(firebaseConfig));
@@ -94,7 +94,8 @@ $("go").onclick = async () => {
   try {
     let pos;
     try { pos = await where(); } catch { return fail("We couldn’t get your location. Allow location access and try again."); }
-    if (metres(pos.coords.latitude, pos.coords.longitude, VENUE.lat, VENUE.lng) > RADIUS_M) return fail("You’re too far from the venue. Move closer and try again.");
+    const away = metres(pos.coords.latitude, pos.coords.longitude, VENUE.lat, VENUE.lng);
+    if (away > RADIUS_M) return fail("You’re too far from the venue (about " + Math.round(away) + " m away, phone accuracy ±" + Math.round(pos.coords.accuracy) + " m). Move closer and try again.");
     const ref = doc(db, "codes", code.replace(/\//g, "_")), cref = doc(db, "counter", "main");
     const r = await runTransaction(db, async t => {
       const cs = await t.get(ref);
