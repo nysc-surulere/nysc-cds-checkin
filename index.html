@@ -31,6 +31,7 @@ button:disabled{opacity:.6}
 </head>
 <body>
 <section class="screen on" id="form">
+<div id="testbar" hidden style="background:#FFF3C4;color:#12261B;padding:10px 24px;font-size:14px">TEST MODE: check-ins are not saved</div>
 <header><h1>NYSC CDS</h1><p>Scan. Enter your code. Check in.</p></header>
 <main>
 <label for="code">Your code</label>
@@ -69,6 +70,9 @@ const firebaseConfig = {
 // 2. Venue spot and allowed distance
 const VENUE = {lat: 6.5132891, lng: 3.3559699};
 const RADIUS_M = 100;
+// TEST MODE: true = skips the database, nothing is saved. Set to false before real use.
+const TEST_MODE = true;
+let testCount = 0;
 
 const db = getFirestore(initializeApp(firebaseConfig));
 const $ = id => document.getElementById(id);
@@ -85,6 +89,7 @@ const metres = (a, b, c, d) => { const R = 6371000, r = x => x * Math.PI / 180, 
   const h = Math.sin(p / 2) ** 2 + Math.cos(r(a)) * Math.cos(r(c)) * Math.sin(l / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
 const where = () => new Promise((ok, no) => navigator.geolocation ? navigator.geolocation.getCurrentPosition(ok, no, {enableHighAccuracy: true, timeout: 15000}) : no());
 
+$("testbar").hidden = !TEST_MODE;
 $("retry").onclick = () => show("form");
 $("go").onclick = async () => {
   const code = $("code").value.trim().toUpperCase();
@@ -96,6 +101,7 @@ $("go").onclick = async () => {
     try { pos = await where(); } catch { return fail("We couldn’t get your location. Allow location access and try again."); }
     const away = metres(pos.coords.latitude, pos.coords.longitude, VENUE.lat, VENUE.lng);
     if (away > RADIUS_M) return fail("You’re too far from the venue (about " + Math.round(away) + " m away, phone accuracy ±" + Math.round(pos.coords.accuracy) + " m). Move closer and try again.");
+    if (TEST_MODE) return done(++testCount, new Date());
     const ref = doc(db, "codes", code.replace(/\//g, "_")), cref = doc(db, "counter", "main");
     const r = await runTransaction(db, async t => {
       const cs = await t.get(ref);
