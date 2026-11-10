@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NYSC CDS Check-In</title>
+<title>NYSC Surulere CDS Check-In</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box}
@@ -11,7 +11,7 @@ body{margin:0;font-family:'DM Sans',system-ui,sans-serif;color:#12261B;backgroun
 .screen{min-height:100vh;display:none;flex-direction:column;max-width:480px;margin:0 auto}
 .screen.on{display:flex}
 header{background:#0B7A43;color:#fff;padding:56px 24px 32px}
-h1{margin:0;font-size:44px;line-height:1.1}
+h1{margin:0;font-size:38px;line-height:1.1}
 header p{margin:8px 0 0;font-size:16px}
 main{flex:1;padding:32px 24px;display:flex;flex-direction:column;gap:18px}
 label{font-weight:500}
@@ -27,12 +27,14 @@ button:disabled{opacity:.6}
 #bad{align-items:center;text-align:center;padding:56px 24px}
 #bad p{font-size:18px;line-height:1.45;color:#3F5A4A}
 #bad button{margin-top:auto;width:100%}
+.foot{margin-top:auto;padding:24px 24px 24px;text-align:center;font-size:14px;line-height:1.5;color:#3F5A4A}
+#ok .foot{color:#fff}
 </style>
 </head>
 <body>
 <section class="screen on" id="form">
 <div id="testbar" hidden style="background:#FFF3C4;color:#12261B;padding:10px 24px;font-size:14px">TEST MODE: check-ins are not saved</div>
-<header><h1>NYSC CDS</h1><p>Scan. Enter your code. Check in.</p></header>
+<header><h1>NYSC Surulere CDS</h1><p>Scan. Enter your code. Check in.</p></header>
 <main>
 <label for="code">Your code</label>
 <input id="code" autocomplete="off" autocapitalize="characters" placeholder="e.g. LA/26A/0123">
@@ -40,19 +42,22 @@ button:disabled{opacity:.6}
 <button id="go">Check In</button>
 <p class="note" style="margin-top:auto;text-align:center">One check-in per code. Numbers are given in order of arrival.</p>
 </main>
+<div class="foot">Courtesy of NYSC 2026 ICT Excos<br>Designed by Alozor Kingsley</div>
 </section>
 <section class="screen" id="ok">
-<h2 style="margin:0">NYSC CDS</h2>
+<h2 style="margin:0">NYSC Surulere CDS</h2>
 <h1 style="font-size:28px;margin-top:40px">You’re checked in</h1>
 <div>Your number</div>
 <div class="num" id="num"></div>
 <div class="card"><div class="note">Clocked in at</div><div class="time" id="time"></div><div class="note" id="date"></div></div>
+<div class="foot">Courtesy of NYSC 2026 ICT Excos<br>Designed by Alozor Kingsley</div>
 </section>
 <section class="screen" id="bad">
-<h2 style="margin:0;color:#0B7A43">NYSC CDS</h2>
+<h2 style="margin:0;color:#0B7A43">NYSC Surulere CDS</h2>
 <h1 style="font-size:28px;margin-top:64px">Check-in not completed</h1>
 <p id="msg"></p>
 <button id="retry">Try again</button>
+<div class="foot">Courtesy of NYSC 2026 ICT Excos<br>Designed by Alozor Kingsley</div>
 </section>
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -71,7 +76,7 @@ const firebaseConfig = {
 const VENUE = {lat: 6.5132891, lng: 3.3559699};
 const RADIUS_M = 100;
 // TEST MODE: true = skips the database, nothing is saved. Set to false before real use.
-const TEST_MODE = true;
+const TEST_MODE = false;
 let testCount = 0;
 
 const db = getFirestore(initializeApp(firebaseConfig));
@@ -102,15 +107,19 @@ $("go").onclick = async () => {
     const away = metres(pos.coords.latitude, pos.coords.longitude, VENUE.lat, VENUE.lng);
     if (away > RADIUS_M) return fail("You’re too far from the venue (about " + Math.round(away) + " m away, phone accuracy ±" + Math.round(pos.coords.accuracy) + " m). Move closer and try again.");
     if (TEST_MODE) return done(++testCount, new Date());
-    const ref = doc(db, "codes", code.replace(/\//g, "_")), cref = doc(db, "counter", "main");
+    const day = new Date().toLocaleDateString("en-CA", {timeZone: "Africa/Lagos"});
+    const codeId = code.replace(/\//g, "_");
+    const cref = doc(db, "codes", codeId), kref = doc(db, "checkins", day + "_" + codeId),
+          dref = doc(db, "devices", day + "_" + deviceId), nref = doc(db, "counters", day);
     const r = await runTransaction(db, async t => {
-      const cs = await t.get(ref);
+      const cs = await t.get(cref), ks = await t.get(kref), ds = await t.get(dref), ns = await t.get(nref);
       if (!cs.exists()) return {err: "That code isn’t on the list."};
-      const c = cs.data();
-      if (c.used) return c.deviceId === deviceId ? {n: c.number, t: c.checkedInAt ? c.checkedInAt.toDate() : new Date()} : {err: "This code has already been used."};
-      const n = (await t.get(cref)).data().count + 1;
-      t.update(cref, {count: n});
-      t.update(ref, {used: true, number: n, deviceId, checkedInAt: serverTimestamp()});
+      if (ks.exists()) { const k = ks.data(); return k.deviceId === deviceId ? {n: k.number, t: k.at ? k.at.toDate() : new Date()} : {err: "This code has already been used today."}; }
+      if (ds.exists()) return {err: "This phone has already been used to check in today."};
+      const n = ns.exists() ? ns.data().count + 1 : 1;
+      t.set(nref, {count: n});
+      t.set(kref, {day, codeId, number: n, deviceId, at: serverTimestamp()});
+      t.set(dref, {day, number: n, at: serverTimestamp()});
       return {n, t: new Date()};
     });
     if (r.err) return fail(r.err);
