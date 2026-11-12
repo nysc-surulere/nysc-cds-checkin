@@ -29,7 +29,7 @@ th{color:#0B7A43}
 <button id="load">Load check-ins</button>
 <p id="count" class="note"></p>
 <button id="csv" hidden>Download spreadsheet (CSV)</button>
-<div style="overflow-x:auto"><table><thead><tr><th>No.</th><th>Code</th><th>Email</th><th>Time</th></tr></thead><tbody id="rows"></tbody></table></div>
+<div style="overflow-x:auto"><table><thead><tr><th>No.</th><th>Code</th><th>Name</th><th>Email</th><th>Time</th></tr></thead><tbody id="rows"></tbody></table></div>
 <button id="out" style="background:none;color:#0B7A43;height:auto;font-size:15px;text-decoration:underline">Sign out</button>
 </div>
 <script type="module">
@@ -47,7 +47,8 @@ const firebaseConfig = {
 const ADMIN_EMAIL = "kingsleyalozor@gmail.com";
 const app = initializeApp(firebaseConfig), db = getFirestore(app), auth = getAuth(app);
 const $ = id => document.getElementById(id);
-let data = [];
+let data = [], names = null;
+const nm = r => (names && names[r.codeId]) || "";
 $("day").value = new Date().toLocaleDateString("en-CA", {timeZone: "Africa/Lagos"});
 const tm = d => d.toLocaleTimeString("en-US", {timeZone: "Africa/Lagos", hour: "2-digit", minute: "2-digit", second: "2-digit"});
 onAuthStateChanged(auth, u => {
@@ -62,17 +63,18 @@ $("load").onclick = async () => {
   $("count").textContent = "Loading...";
   try {
     const snap = await getDocs(query(collection(db, "checkins"), where("day", "==", $("day").value)));
+    if (!names) { names = {}; try { (await getDocs(collection(db, "names"))).forEach(d => { names[d.id] = d.data().n; }); } catch (e) {} }
     data = snap.docs.map(d => d.data()).sort((a, b) => a.number - b.number);
     const body = $("rows"); body.textContent = "";
     data.forEach(r => { const tr = body.insertRow();
-      [r.number, r.codeId.replace(/_/g, "/"), r.email || "", r.at ? tm(r.at.toDate()) : ""].forEach(v => { tr.insertCell().textContent = v; }); });
+      [r.number, r.codeId.replace(/_/g, "/"), nm(r), r.email || "", r.at ? tm(r.at.toDate()) : ""].forEach(v => { tr.insertCell().textContent = v; }); });
     $("count").textContent = data.length + " check-in" + (data.length === 1 ? "" : "s") + " on " + $("day").value;
     $("csv").hidden = !data.length;
   } catch (e) { $("count").textContent = "Couldn’t load: " + e.message; }
 };
 $("csv").onclick = () => {
   const q = v => '"' + String(v).replace(/"/g, '""') + '"';
-  const lines = ["Number,Code,Email,Time,Date"].concat(data.map(r => [r.number, r.codeId.replace(/_/g, "/"), r.email || "", r.at ? tm(r.at.toDate()) : "", r.day].map(q).join(",")));
+  const lines = ["Number,Code,Name,Email,Time,Date"].concat(data.map(r => [r.number, r.codeId.replace(/_/g, "/"), nm(r), r.email || "", r.at ? tm(r.at.toDate()) : "", r.day].map(q).join(",")));
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([lines.join("\n")], {type: "text/csv"}));
   a.download = "checkins-" + $("day").value + ".csv"; a.click();
