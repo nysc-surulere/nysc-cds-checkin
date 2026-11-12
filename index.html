@@ -8,32 +8,168 @@
 <style>
 *{box-sizing:border-box}
 body{margin:0;font-family:'DM Sans',system-ui,sans-serif;color:#12261B;background:#fff;min-height:100vh}
-.wrap{min-height:100vh;display:flex;flex-direction:column;max-width:480px;margin:0 auto}
+.screen{min-height:100vh;display:none;flex-direction:column;max-width:480px;margin:0 auto}
+.screen.on{display:flex}
 header{background:#0B7A43;color:#fff;padding:56px 24px 32px}
 h1{margin:0;font-size:38px;line-height:1.1}
 header p{margin:8px 0 0;font-size:16px}
-main{flex:1;padding:48px 24px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:18px}
-.icon{width:88px;height:88px;border-radius:44px;background:#EAF5EE;display:flex;align-items:center;justify-content:center}
-h2{margin:8px 0 0;font-size:28px;color:#12261B}
-.big{font-size:20px;line-height:1.5;color:#12261B;margin:0}
-.time{font-size:44px;font-weight:700;color:#0B7A43;margin:0}
-.note{font-size:16px;line-height:1.5;color:#3F5A4A;margin:0}
-.foot{padding:24px;text-align:center;font-size:14px;line-height:1.5;color:#3F5A4A}
+main{flex:1;padding:32px 24px;display:flex;flex-direction:column;gap:18px}
+label{font-weight:500}
+input{height:58px;border:2px solid #0B7A43;border-radius:14px;padding:0 16px;font:inherit;font-size:18px;color:#12261B}
+button{height:58px;border:0;border-radius:14px;background:#0B7A43;color:#fff;font:inherit;font-size:19px;font-weight:700;cursor:pointer}
+button:disabled{opacity:.6}
+:focus-visible{outline:3px solid #12261B;outline-offset:2px}
+.note{color:#3F5A4A;font-size:15px;line-height:1.4}
+#ok{background:#0B7A43;color:#fff;align-items:center;text-align:center;padding:56px 24px}
+#ok .num{font-size:132px;font-weight:700;line-height:1;margin:8px 0 32px}
+#ok .card{background:#fff;color:#12261B;border-radius:16px;padding:20px;width:100%}
+#ok .time{font-size:32px;font-weight:700;color:#0B7A43}
+#bad{align-items:center;text-align:center;padding:56px 24px}
+#bad p{font-size:18px;line-height:1.45;color:#3F5A4A}
+#bad button{margin-top:auto;width:100%}
+.foot{margin-top:auto;padding:24px 24px 24px;text-align:center;font-size:14px;line-height:1.5;color:#3F5A4A}
+#ok .foot{color:#fff}
+[hidden]{display:none!important}
+.stack{display:flex;flex-direction:column;gap:18px}
+#signout{background:none;color:#0B7A43;height:auto;font-size:15px;font-weight:500;text-decoration:underline;padding:0;text-align:left}
 </style>
 </head>
 <body>
-<div class="wrap">
-<header><h1>NYSC Surulere CDS</h1><p>Attendance Check-In</p></header>
+<section class="screen on" id="form">
+<div id="testbar" hidden style="background:#FFF3C4;color:#12261B;padding:10px 24px;font-size:14px">TEST MODE: check-ins are not saved</div>
+<header><h1>NYSC Surulere CDS</h1><p>Scan. Sign in. Check in.</p></header>
 <main>
-<div class="icon"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#0B7A43" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
-<h2>We’re sorry</h2>
-<p class="big">We are working on the site at the moment.</p>
-<p class="big">Please check back at</p>
-<p class="time">11:00 AM</p>
-<p class="note">If after 11:00 AM your phone browser still shows this page, please refresh your browser and scan again.</p>
-<p class="note">Thank you for your patience.</p>
+<div id="signin" class="stack">
+<p class="note">Step 1: sign in with your Google account. Use the same account every day.</p>
+<button id="gsign">Sign in with Google</button>
+</div>
+<div id="entry" class="stack" hidden>
+<p class="note" id="who"></p>
+<label for="code">Your code</label>
+<input id="code" autocomplete="off" autocapitalize="characters" placeholder="e.g. LA/26A/0123">
+<p class="note">We’ll ask for your location to confirm you’re at the venue.</p>
+<button id="go">Check In</button>
+<button id="signout" type="button">Not you? Sign out</button>
+</div>
+<p class="note" style="margin-top:auto;text-align:center">One check-in per code. Numbers are given in order of arrival.</p>
 </main>
 <div class="foot">Courtesy of NYSC 2026/2027 ICT Excos<br>Designed by Alozor Kingsley<br>Sponsored by Seamflux Technologies</div>
-</div>
+</section>
+<section class="screen" id="ok">
+<h2 style="margin:0">NYSC Surulere CDS</h2>
+<h1 style="font-size:28px;margin-top:40px">You’re checked in</h1>
+<div>Your number</div>
+<div class="num" id="num"></div>
+<div class="card"><div class="note">Clocked in at</div><div class="time" id="time"></div><div class="note" id="date"></div></div>
+<div class="foot">Courtesy of NYSC 2026/2027 ICT Excos<br>Designed by Alozor Kingsley<br>Sponsored by Seamflux Technologies</div>
+</section>
+<section class="screen" id="bad">
+<h2 style="margin:0;color:#0B7A43">NYSC Surulere CDS</h2>
+<h1 style="font-size:28px;margin-top:64px">Check-in not completed</h1>
+<p id="msg"></p>
+<button id="retry">Try again</button>
+<div class="foot">Courtesy of NYSC 2026/2027 ICT Excos<br>Designed by Alozor Kingsley<br>Sponsored by Seamflux Technologies</div>
+</section>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {getFirestore,doc,runTransaction,serverTimestamp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,signOut} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+// 1. Firebase config
+const firebaseConfig = {
+  apiKey: "AIzaSyAV9iAHGcISrYF0PR3wVZekkyKONlO26_A",
+  authDomain: "nysc-cds-checkin.firebaseapp.com",
+  projectId: "nysc-cds-checkin",
+  storageBucket: "nysc-cds-checkin.firebasestorage.app",
+  messagingSenderId: "429002366026",
+  appId: "1:429002366026:web:9ab29432d9468ec2181ab3"
+};
+// 2. Venue spot and allowed distance
+const VENUE = {lat: 6.5132891, lng: 3.3559699};
+const RADIUS_M = 100;
+// TEST MODE: true = skips the database, nothing is saved. Set to false before real use.
+const TEST_MODE = false;
+// Private/incognito tab blocking is best-effort. Set to false to switch it off.
+const BLOCK_PRIVATE = true;
+let testCount = 0;
+
+const app = initializeApp(firebaseConfig), db = getFirestore(app), auth = getAuth(app);
+const $ = id => document.getElementById(id);
+const deviceId = (() => { try { let d = localStorage.getItem("deviceId"); if (!d) { d = crypto.randomUUID(); localStorage.setItem("deviceId", d); } return d; } catch { return crypto.randomUUID(); } })();
+const show = id => document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id));
+const fail = m => { $("msg").textContent = m; show("bad"); };
+const done = (n, t) => {
+  $("num").textContent = n;
+  $("time").textContent = t.toLocaleTimeString("en-US", {hour: "2-digit", minute: "2-digit"});
+  $("date").textContent = t.toLocaleDateString("en-GB", {weekday: "long", day: "numeric", month: "long", year: "numeric"});
+  show("ok");
+};
+const metres = (a, b, c, d) => { const R = 6371000, r = x => x * Math.PI / 180, p = r(c - a), l = r(d - b);
+  const h = Math.sin(p / 2) ** 2 + Math.cos(r(a)) * Math.cos(r(c)) * Math.sin(l / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
+const where = () => new Promise((ok, no) => navigator.geolocation ? navigator.geolocation.getCurrentPosition(ok, no, {enableHighAccuracy: true, timeout: 15000}) : no());
+
+$("testbar").hidden = !TEST_MODE;
+async function isPrivate() {
+  try {
+    try { localStorage.setItem("_t", "1"); localStorage.removeItem("_t"); } catch { return true; }
+    const ua = navigator.userAgent, m = ua.match(/Chrome\/(\d+)/);
+    if (m && +m[1] >= 147 && !/SamsungBrowser|OPR|UCBrowser|Firefox|FxiOS|CriOS/.test(ua) && navigator.storage && navigator.storage.estimate) {
+      const {quota, usage} = await navigator.storage.estimate();
+      return (quota - usage) < 9.5 * 1024 ** 3;
+    }
+  } catch (e) {}
+  return false;
+}
+onAuthStateChanged(auth, u => {
+  $("signin").hidden = !!u; $("entry").hidden = !u;
+  $("who").textContent = u ? "Signed in as " + u.email : "";
+});
+$("gsign").onclick = async () => {
+  try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+  catch (e) { fail("Google sign-in didn’t finish. Allow pop-ups for this site and try again. If you opened this link inside another app, open it in Safari or Chrome instead."); }
+};
+$("signout").onclick = () => signOut(auth);
+$("retry").onclick = () => show("form");
+$("go").onclick = async () => {
+  const u = auth.currentUser;
+  if (!u) return fail("Sign in with Google first.");
+  const code = $("code").value.trim().toUpperCase();
+  if (!code) return fail("Enter your code to check in.");
+  if (!/^LA\/2[67][ABC]\/\d{4,}$/.test(code)) return fail("That code isn’t valid. It should look like LA/26A/0123.");
+  if (BLOCK_PRIVATE && await isPrivate()) return fail("Private or incognito tabs aren’t allowed. Open this page in a normal browser tab and try again.");
+  $("go").disabled = true;
+  try {
+    let pos;
+    try { pos = await where(); } catch { return fail("We couldn’t get your location. Allow location access and try again."); }
+    const away = metres(pos.coords.latitude, pos.coords.longitude, VENUE.lat, VENUE.lng);
+    if (away > RADIUS_M) return fail("You’re too far from the venue (about " + Math.round(away) + " m away, phone accuracy ±" + Math.round(pos.coords.accuracy) + " m). Move closer and try again.");
+    if (TEST_MODE) return done(++testCount, new Date());
+    const day = new Date().toLocaleDateString("en-CA", {timeZone: "Africa/Lagos"});
+    const codeId = code.replace(/\//g, "_");
+    const cref = doc(db, "codes", codeId), kref = doc(db, "checkins", day + "_" + codeId),
+          dref = doc(db, "devices", day + "_" + deviceId), aref = doc(db, "accounts", day + "_" + u.uid),
+          lref = doc(db, "claims", codeId), nref = doc(db, "counters", day);
+    const r = await runTransaction(db, async t => {
+      const cs = await t.get(cref), ks = await t.get(kref), ds = await t.get(dref),
+            as = await t.get(aref), ls = await t.get(lref), ns = await t.get(nref);
+      if (!cs.exists()) return {err: "That code isn’t on the list."};
+      if (ks.exists()) { const k = ks.data(); return k.uid === u.uid ? {n: k.number, t: k.at ? k.at.toDate() : new Date()} : {err: "This code has already been used today."}; }
+      if (ls.exists() && ls.data().uid !== u.uid) return {err: "This code is linked to a different Google account."};
+      if (as.exists()) return {err: "This Google account has already checked in today."};
+      if (ds.exists()) return {err: "This phone has already been used to check in today."};
+      const n = ns.exists() ? ns.data().count + 1 : 1;
+      t.set(nref, {count: n});
+      t.set(kref, {day, codeId, number: n, deviceId, uid: u.uid, email: u.email, at: serverTimestamp()});
+      t.set(dref, {day, number: n, at: serverTimestamp()});
+      t.set(aref, {day, number: n, at: serverTimestamp()});
+      if (!ls.exists()) t.set(lref, {uid: u.uid, at: serverTimestamp()});
+      return {n, t: new Date()};
+    });
+    if (r.err) return fail(r.err);
+    done(r.n, r.t);
+  } catch (e) { fail("Something went wrong. Check your connection and try again."); }
+  finally { $("go").disabled = false; }
+};
+</script>
 </body>
 </html>
