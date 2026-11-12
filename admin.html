@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin: check-ins</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,sans-serif;color:#12261B;padding:32px 20px;max-width:640px;margin:0 auto}
+h1{color:#0B7A43;font-size:28px;margin:0 0 20px}
+.stack{display:flex;flex-direction:column;gap:16px}
+[hidden]{display:none!important}
+button,input{height:54px;border-radius:14px;font:inherit;font-size:18px}
+button{border:0;background:#0B7A43;color:#fff;font-weight:700}
+input{border:2px solid #0B7A43;padding:0 14px;color:#12261B}
+.note{color:#3F5A4A;font-size:15px;margin:0}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #d6e5db}
+th{color:#0B7A43}
+</style>
+</head>
+<body>
+<h1>Check-ins</h1>
+<div id="login" class="stack"><p class="note">Admin only. Sign in with the admin Google account.</p><button id="gs">Sign in with Google</button></div>
+<div id="panel" class="stack" hidden>
+<p class="note" id="who"></p>
+<label for="day">Date</label>
+<input id="day" type="date">
+<button id="load">Load check-ins</button>
+<p id="count" class="note"></p>
+<button id="csv" hidden>Download spreadsheet (CSV)</button>
+<div style="overflow-x:auto"><table><thead><tr><th>No.</th><th>Code</th><th>Email</th><th>Time</th></tr></thead><tbody id="rows"></tbody></table></div>
+<button id="out" style="background:none;color:#0B7A43;height:auto;font-size:15px;text-decoration:underline">Sign out</button>
+</div>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {getFirestore,collection,query,where,getDocs} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,signOut} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+const firebaseConfig = {
+  apiKey: "AIzaSyAV9iAHGcISrYF0PR3wVZekkyKONlO26_A",
+  authDomain: "nysc-cds-checkin.firebaseapp.com",
+  projectId: "nysc-cds-checkin",
+  storageBucket: "nysc-cds-checkin.firebasestorage.app",
+  messagingSenderId: "429002366026",
+  appId: "1:429002366026:web:9ab29432d9468ec2181ab3"
+};
+const ADMIN_EMAIL = "kingsleyalozor@gmail.com";
+const app = initializeApp(firebaseConfig), db = getFirestore(app), auth = getAuth(app);
+const $ = id => document.getElementById(id);
+let data = [];
+$("day").value = new Date().toLocaleDateString("en-CA", {timeZone: "Africa/Lagos"});
+const tm = d => d.toLocaleTimeString("en-US", {timeZone: "Africa/Lagos", hour: "2-digit", minute: "2-digit", second: "2-digit"});
+onAuthStateChanged(auth, u => {
+  const ok = !!u && u.email === ADMIN_EMAIL;
+  $("login").hidden = !!u; $("panel").hidden = !u;
+  $("who").textContent = !u ? "" : ok ? "Signed in as " + u.email : u.email + " is not the admin account. Sign out and use the admin account.";
+  $("load").hidden = $("day").hidden = !ok;
+});
+$("gs").onclick = () => signInWithPopup(auth, new GoogleAuthProvider()).catch(() => alert("Sign-in didn’t finish. Allow pop-ups and try again."));
+$("out").onclick = () => signOut(auth);
+$("load").onclick = async () => {
+  $("count").textContent = "Loading...";
+  try {
+    const snap = await getDocs(query(collection(db, "checkins"), where("day", "==", $("day").value)));
+    data = snap.docs.map(d => d.data()).sort((a, b) => a.number - b.number);
+    const body = $("rows"); body.textContent = "";
+    data.forEach(r => { const tr = body.insertRow();
+      [r.number, r.codeId.replace(/_/g, "/"), r.email || "", r.at ? tm(r.at.toDate()) : ""].forEach(v => { tr.insertCell().textContent = v; }); });
+    $("count").textContent = data.length + " check-in" + (data.length === 1 ? "" : "s") + " on " + $("day").value;
+    $("csv").hidden = !data.length;
+  } catch (e) { $("count").textContent = "Couldn’t load: " + e.message; }
+};
+$("csv").onclick = () => {
+  const q = v => '"' + String(v).replace(/"/g, '""') + '"';
+  const lines = ["Number,Code,Email,Time,Date"].concat(data.map(r => [r.number, r.codeId.replace(/_/g, "/"), r.email || "", r.at ? tm(r.at.toDate()) : "", r.day].map(q).join(",")));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([lines.join("\n")], {type: "text/csv"}));
+  a.download = "checkins-" + $("day").value + ".csv"; a.click();
+};
+</script>
+</body>
+</html>
