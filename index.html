@@ -32,6 +32,7 @@ button:disabled{opacity:.6}
 [hidden]{display:none!important}
 .stack{display:flex;flex-direction:column;gap:18px}
 #signout{background:none;color:#0B7A43;height:auto;font-size:15px;font-weight:500;text-decoration:underline;padding:0;text-align:left}
+.tip{background:#EAF5EE;border-left:6px solid #0B7A43;border-radius:10px;padding:14px 16px;font-size:16px;line-height:1.45;color:#12261B;margin:0}
 </style>
 </head>
 <body>
@@ -41,12 +42,14 @@ button:disabled{opacity:.6}
 <main>
 <div id="signin" class="stack">
 <p class="note">Step 1: sign in with your Google account. Use the same account every day.</p>
+<p class="tip"><b>Important:</b> always make sure <b>Location</b> and <b>Precise Location</b> are turned on for your phone and for your browser before you check in.</p>
 <button id="gsign">Sign in with Google</button>
 </div>
 <div id="entry" class="stack" hidden>
 <p class="note" id="who"></p>
 <label for="code">Your code</label>
 <input id="code" autocomplete="off" autocapitalize="characters" placeholder="e.g. LA/26A/0123">
+<p class="tip"><b>Important:</b> always make sure <b>Location</b> and <b>Precise Location</b> are turned on for your phone and for your browser before you check in.</p>
 <p class="note">We’ll ask for your location to confirm you’re at the venue.</p>
 <button id="go">Check In</button>
 <button id="signout" type="button">Not you? Sign out</button>
@@ -87,6 +90,7 @@ const firebaseConfig = {
 // 2. Venue spot and allowed distance
 const VENUE = {lat: 6.5132891, lng: 3.3559699};
 const RADIUS_M = 100;
+const MAX_ACCURACY_M = 150;   // reject vague or approximate locations
 // TEST MODE: true = skips the database, nothing is saved. Set to false before real use.
 const TEST_MODE = false;
 // Private/incognito tab blocking is best-effort. Set to false to switch it off.
@@ -106,7 +110,19 @@ const done = (n, t) => {
 };
 const metres = (a, b, c, d) => { const R = 6371000, r = x => x * Math.PI / 180, p = r(c - a), l = r(d - b);
   const h = Math.sin(p / 2) ** 2 + Math.cos(r(a)) * Math.cos(r(c)) * Math.sin(l / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
-const where = () => new Promise((ok, no) => navigator.geolocation ? navigator.geolocation.getCurrentPosition(ok, no, {enableHighAccuracy: true, timeout: 15000}) : no());
+const where = () => new Promise((ok, no) => {
+  if (!navigator.geolocation) return no({code: 0});
+  let best = null, done = false, w; const all = [];
+  const out = () => { const c = best.coords; return {lat: c.latitude, lng: c.longitude, acc: c.accuracy, all}; };
+  const stop = () => { done = true; clearTimeout(timer); clearTimeout(early); navigator.geolocation.clearWatch(w); };
+  const timer = setTimeout(() => { if (done) return; stop(); best ? ok(out()) : no({code: 3}); }, 15000);
+  const early = setTimeout(() => { if (!done && best && best.coords.accuracy <= 50) { stop(); ok(out()); } }, 4000);
+  w = navigator.geolocation.watchPosition(p => {
+    if (done || Date.now() - p.timestamp > 30000) return;   // ignore old, cached fixes
+    all.push([p.coords.latitude, p.coords.longitude]);
+    if (!best || p.coords.accuracy < best.coords.accuracy) best = p;
+  }, e => { if (done) return; stop(); no(e); }, {enableHighAccuracy: true, maximumAge: 0, timeout: 15000});
+});
 
 $("testbar").hidden = !TEST_MODE;
 async function isPrivate() {
@@ -137,12 +153,18 @@ $("go").onclick = async () => {
   if (!code) return fail("Enter your code to check in.");
   if (!/^LA\/2[67][ABC]\/\d{4,}$/.test(code)) return fail("That code isn’t valid. It should look like LA/26A/0123.");
   if (BLOCK_PRIVATE && await isPrivate()) return fail("Private or incognito tabs aren’t allowed. Open this page in a normal browser tab and try again.");
-  $("go").disabled = true;
+  $("go").disabled = true; $("go").textContent = "Getting your location...";
   try {
     let pos;
-    try { pos = await where(); } catch { return fail("We couldn’t get your location. Allow location access and try again."); }
-    const away = metres(pos.coords.latitude, pos.coords.longitude, VENUE.lat, VENUE.lng);
-    if (away > RADIUS_M) return fail("You’re too far from the venue (about " + Math.round(away) + " m away, phone accuracy ±" + Math.round(pos.coords.accuracy) + " m). Move closer and try again.");
+    try { pos = await where(); } catch { return fail("We couldn’t get a fresh location. Allow location for this site, turn on Precise Location and try again."); }
+    if (pos.acc > MAX_ACCURACY_M) return fail("Your phone’s location isn’t accurate enough (±" + Math.round(pos.acc) + " m). Turn on Location and Precise Location, move to an open spot and try again.");
+    const away = metres(pos.lat, pos.lng, VENUE.lat, VENUE.lng);
+    if (away > RADIUS_M) return fail("You’re too far from the venue (about " + Math.round(away) + " m away, phone accuracy ±" + Math.round(pos.acc) + " m). Move closer and try again.");
+    const flags = [];
+    if (!(pos.acc >= 2)) flags.push("acc<2m");
+    if (pos.all.length >= 3 && new Set(pos.all.map(r => r[0] + "," + r[1])).size === 1) flags.push("no-jitter");
+    if (away < 2) flags.push("on-pin");
+    if (flags.length >= 2) return fail("Your phone’s location looks unreliable. Turn off any fake-location or location-changing app, restart your phone and try again.");
     if (TEST_MODE) return done(++testCount, new Date());
     const day = new Date().toLocaleDateString("en-CA", {timeZone: "Africa/Lagos"});
     const codeId = code.replace(/\//g, "_");
@@ -159,7 +181,7 @@ $("go").onclick = async () => {
       if (ds.exists()) return {err: "This phone has already been used to check in today."};
       const n = ns.exists() ? ns.data().count + 1 : 1;
       t.set(nref, {count: n});
-      t.set(kref, {day, codeId, number: n, deviceId, uid: u.uid, email: u.email, at: serverTimestamp()});
+      t.set(kref, {day, codeId, number: n, deviceId, uid: u.uid, email: u.email, dist: Math.round(away), acc: Math.round(pos.acc), flag: flags.join(","), at: serverTimestamp()});
       t.set(dref, {day, number: n, at: serverTimestamp()});
       t.set(aref, {day, number: n, at: serverTimestamp()});
       if (!ls.exists()) t.set(lref, {uid: u.uid, at: serverTimestamp()});
@@ -168,7 +190,7 @@ $("go").onclick = async () => {
     if (r.err) return fail(r.err);
     done(r.n, r.t);
   } catch (e) { fail("Something went wrong. Check your connection and try again."); }
-  finally { $("go").disabled = false; }
+  finally { $("go").disabled = false; $("go").textContent = "Check In"; }
 };
 </script>
 </body>
